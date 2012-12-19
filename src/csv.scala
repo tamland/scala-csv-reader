@@ -31,26 +31,29 @@ package object csv {
   def read(
     filename: String,
     delimiter: String = ",",
-    quoteChar: String = "",
+    quoteChar: Char = '"',
     hasHeader: Boolean = false): Iterator[Product] = {
-
-    val fields = Source.fromFile(filename).getLines().next().split(delimiter).length
     
-    val clazz = Class.forName("scala.Tuple" + fields).getConstructors.apply(0)
-
+    val fieldSplitter = "%s(?=([^%s]*%s[^%s]*%s)*[^%s]*$)"
+    		.format(delimiter, quoteChar, quoteChar, quoteChar, quoteChar, quoteChar)
+    val numOfFields = Source.fromFile(filename).getLines().next().split(fieldSplitter).length
+    val tupleClass = Class.forName("scala.Tuple" + numOfFields).getConstructors.apply(0)
+    
     val file = Source.fromFile(filename)
-    
     val lines = file.getLines()
       .drop(if (hasHeader) 1 else 0)
       .filterNot(_.isEmpty())
     
-    val lists = lines.map { l =>
-      val arr = l.split(quoteChar + delimiter + quoteChar)
-      arr(0) = arr(0).drop(quoteChar.length)
-      arr(arr.length - 1) = arr(arr.length - 1).dropRight(quoteChar.length)
-      arr
+    val lists = lines.map { line =>
+      line.split(fieldSplitter, numOfFields).map(trim(_, quoteChar))
     }
-    
-    lists.map { t => clazz.newInstance(t: _*).asInstanceOf[Product] }
+    val tuples = lists.map { t => tupleClass.newInstance(t: _*).asInstanceOf[Product] }
+    tuples
+  }
+  
+  private def trim(str: String, character: Char) = {
+    val left = if (str.head == character) 1 else 0
+    val right = if (str.last == character) 1 else 0
+    str.drop(left).dropRight(right)
   }
 }
